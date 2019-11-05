@@ -31,7 +31,7 @@ class Attack_None(nn.Module):
         else:
             self.basic_net.eval()
         outputs, _ = self.basic_net(inputs)
-        return outputs, None, True, inputs.detach(), inputs.detach()
+        return outputs, None
 
 
 class Attack_PGD(nn.Module):
@@ -44,6 +44,7 @@ class Attack_PGD(nn.Module):
         self.step_size = config['step_size']
         self.epsilon = config['epsilon']
         self.num_steps = config['num_steps']
+        self.loss_func = config['loss_func']
         self.train_flag = True if 'train' not in config.keys(
         ) else config['train']
 
@@ -61,7 +62,7 @@ class Attack_PGD(nn.Module):
 
         if not attack:
             outputs = self.basic_net(inputs)[0]
-            return outputs, None, True, inputs.detach(), inputs.detach()
+            return outputs, None
 
         if self.box_type == 'white':
             aux_net = pickle.loads(pickle.dumps(self.basic_net))
@@ -73,8 +74,6 @@ class Attack_PGD(nn.Module):
         targets_prob = F.softmax(logits_pred_nat.float(), dim=1)
 
         num_classes = targets_prob.size(1)
-
-        loss_fun = torch.nn.CrossEntropyLoss(reduction='none')
 
         outputs = aux_net(inputs)[0]
         targets_prob = F.softmax(outputs.float(), dim=1)
@@ -94,7 +93,7 @@ class Attack_PGD(nn.Module):
                 x.grad.data.fill_(0)
             aux_net.eval()
             logits = aux_net(x)[0]
-            loss = loss_fun(logits, y_tensor_adv)
+            loss = self.loss_func(logits, y_tensor_adv)
             loss = loss.mean()
             aux_net.zero_grad()
             loss.backward()
@@ -113,8 +112,7 @@ class Attack_PGD(nn.Module):
 
         logits_pert = self.basic_net(x.detach())[0]
 
-        return logits_pert, targets_prob.detach(), True, x.detach(
-        ), x_org.detach()
+        return logits_pert, targets_prob.detach()
 
 
 class Attack_FeaScatter(nn.Module):
@@ -144,8 +142,7 @@ class Attack_FeaScatter(nn.Module):
 
         if not attack:
             outputs, _ = self.basic_net(inputs)
-            return outputs, None, True, inputs.detach(), inputs.detach()
-
+            return outputs, None
         if self.box_type == 'white':
             aux_net = pickle.loads(pickle.dumps(self.basic_net))
         elif self.box_type == 'black':
@@ -212,4 +209,4 @@ class Attack_FeaScatter(nn.Module):
 
             adv_loss = loss_ce(logits_pred, y_sm.detach())
 
-        return logits_pred, adv_loss, True, x.detach(), x_org.detach()
+        return logits_pred, adv_loss
